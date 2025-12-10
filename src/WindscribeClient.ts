@@ -192,7 +192,7 @@ export class WindscribeClient {
 
       // extract data from page
       const epfExpires = res.data.match(/epfExpires = (\d+);/)[1]; // this is always present. set to 0 if no port is active
-      const ports = [...res.data.matchAll(/<span>(?<port>\d+)<\/span>/g)].map(x => +x[1]); // this will return an empty array when there are not pots forwarded
+      const ports = [...res.data.matchAll(/<span class="pf-ext">(?<port>\d+)<\/span>/g)].map(x => +x[1]); // this will return an empty array when there are not pots forwarded
 
       return {
         epfExpires: +epfExpires,
