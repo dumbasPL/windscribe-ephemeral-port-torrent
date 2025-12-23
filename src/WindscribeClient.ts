@@ -2,7 +2,9 @@ import AsyncLock from 'async-lock';
 import {AxiosResponse, default as axios} from 'axios';
 import {Store, default as Keyv} from 'keyv';
 import {Cookie, parse as parseCookie} from 'set-cookie-parser';
+import {webcrypto as crypto} from 'crypto';
 import qs from 'qs';
+import {CaptchaSolver, CaptchaData, CaptchaSolution} from './CaptchaSolver.js';
 
 
 const lock = new AsyncLock();
@@ -109,21 +111,69 @@ export class WindscribeClient {
 
   private async login(): Promise<Cookie> {
     try {
-      // get csrf token and time
-      const {data: csrfData} = await axios.post<{csrf_token: string, csrf_time: number}>('https://res.windscribe.com/res/logintoken', null, {
-        headers: {'User-Agent': userAgent},
-      });
-
-      // log in
-      const res = await axios.post('https://windscribe.com/login', qs.stringify({
-        login: '1',
-        upgrade: '0',
-        csrf_time: csrfData.csrf_time,
-        csrf_token: csrfData.csrf_token,
+      const tokenData = await axios.post('https://windscribe.com/authtoken/login', qs.stringify({
         username: this.username,
         password: this.password,
-        code: ''
       }), {
+        headers: {'content-type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent},
+        maxRedirects: 0,
+        validateStatus: status => status == 200,
+      });
+
+      if (tokenData.data.errorCode) {
+        throw new Error(tokenData.data.errorMessage);
+      }
+
+      const token = tokenData.data.data.token;
+
+      // Check if captcha is required
+      let captchaSolution: CaptchaSolution | null = null;
+      if (tokenData.data.data.captcha) {
+        console.log('Captcha required, solving...');
+        const captchaData: CaptchaData = tokenData.data.data.captcha;
+        const solver = new CaptchaSolver();
+        captchaSolution = await solver.solve(captchaData);
+        console.log(`Captcha solved with offset: ${captchaSolution.offset}`);
+      } else {
+        console.log('No captcha required');
+      }
+
+      // calculate token signature
+      const encoder = new TextEncoder();
+      const data = encoder.encode(token + 'my_mom_told_me_this_is_peak_engineering');
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const sigHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      // Build login data
+      const loginData: Record<string, string | number> = {
+        login: '1',
+        username: this.username,
+        password: this.password,
+        secure_token: token,
+        secure_token_sig: sigHex,
+        timestamp: Date.now(),
+        nonce: Math.random().toString(36).substring(2, 15),
+        client_version: '1.0.0',
+        session_id: crypto.getRandomValues(new Uint8Array(16)).reduce((a,b)=>a+('0'+b.toString(16)).slice(-2),''),
+        request_id: btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16)))).replace(/[^a-zA-Z0-9]/g, '').substring(0, 24),
+        upgrade: '',
+      };
+
+      // Add captcha solution if present
+      if (captchaSolution) {
+        loginData.captcha_solution = captchaSolution.offset;
+        // Add trail data with indexed array format
+        captchaSolution.trail.x.forEach((value, index) => {
+          loginData[`captcha_trail[x][${index}]`] = value;
+        });
+        captchaSolution.trail.y.forEach((value, index) => {
+          loginData[`captcha_trail[y][${index}]`] = value;
+        });
+      }
+
+      // log in
+      const res = await axios.post('https://windscribe.com/login', qs.stringify(loginData), {
         headers: {'content-type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent},
         maxRedirects: 0,
         validateStatus: status => status == 302,
@@ -132,6 +182,7 @@ export class WindscribeClient {
       // extract the cookie
       return parseCookie(res.headers['set-cookie'], {map: true, decodeValues: true})['ws_session_auth_hash'];
     } catch (error) {
+console.dir(error);
       // try to extract windscribe message
       if (error.response) {
         const response = error.response as AxiosResponse<string>;
@@ -192,7 +243,7 @@ export class WindscribeClient {
 
       // extract data from page
       const epfExpires = res.data.match(/epfExpires = (\d+);/)[1]; // this is always present. set to 0 if no port is active
-      const ports = [...res.data.matchAll(/<span>(?<port>\d+)<\/span>/g)].map(x => +x[1]); // this will return an empty array when there are not pots forwarded
+      const ports = [...res.data.matchAll(/<span class="pf-ext">(?<port>\d+)<\/span>/g)].map(x => +x[1]); // this will return an empty array when there are not pots forwarded
 
       return {
         epfExpires: +epfExpires,

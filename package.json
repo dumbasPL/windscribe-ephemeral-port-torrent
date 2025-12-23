@@ -20,6 +20,7 @@
     "@types/node-cron": "^3.0.8",
     "@types/qs": "^6.9.7",
     "@types/set-cookie-parser": "^2.4.2",
+    "@types/sharp": "^0.32.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "eslint": "^8.45.0",
@@ -37,6 +38,7 @@
     "keyv-file": "^0.2.0",
     "node-cron": "^3.0.2",
     "qs": "^6.11.2",
-    "set-cookie-parser": "^2.6.0"
+    "set-cookie-parser": "^2.6.0",
+    "sharp": "^0.34.5"
   }
 }
