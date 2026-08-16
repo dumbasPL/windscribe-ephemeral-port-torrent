@@ -22,13 +22,13 @@ const deluge = new DelugeClient(config.delugeUrl, config.delugePassword, config.
 
 // init schedule if configured
 const scheduledTask = !config.cronSchedule ? null :
-  schedule(config.cronSchedule, () => run('schedule'), {scheduled: false});
+  schedule(config.cronSchedule, () => run('schedule'));
 
 async function update() {
-  let nextRetry: Date = null;
-  let nextRun: Date = null;
+  let nextRetry: Date | null = null;
+  let nextRun: Date | null = null;
 
-  let portInfo: WindscribePort;
+  let portInfo: WindscribePort | null = null;
   try {
     // try to update ephemeral port
     portInfo = await windscribe.updatePort();

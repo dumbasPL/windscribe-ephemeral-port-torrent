@@ -11,32 +11,27 @@
     "start": "node --loader ts-node/esm src/index.ts",
     "dev": "nodemon --config nodemon.json src/index.ts",
     "dev:debug": "nodemon --config nodemon.json --inspect-brk src/index.ts",
-    "lint": "eslint . --ext .ts",
     "build": "tsc"
   },
   "devDependencies": {
     "@types/async-lock": "^1.4.0",
-    "@types/node": "^20.4.2",
+    "@types/node": "^26.2.0",
     "@types/node-cron": "^3.0.8",
     "@types/qs": "^6.9.7",
     "@types/set-cookie-parser": "^2.4.2",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.45.0",
-    "eslint-config-google": "^0.14.0",
     "nodemon": "^3.0.1",
     "ts-node": "^10.9.1",
-    "typescript": "^5.1.6"
+    "typescript": "^7.0.2"
   },
   "dependencies": {
-    "@ctrl/deluge": "^4.3.1",
+    "@ctrl/deluge": "^8.0.0",
     "async-lock": "^1.4.0",
     "axios": "^1.4.0",
-    "dotenv": "^16.3.1",
-    "keyv": "^4.5.2",
-    "keyv-file": "^0.2.0",
-    "node-cron": "^3.0.2",
+    "dotenv": "^17.4.2",
+    "keyv": "^5.6.0",
+    "keyv-file": "^5.3.5",
+    "node-cron": "^4.6.0",
     "qs": "^6.11.2",
-    "set-cookie-parser": "^2.6.0"
+    "set-cookie-parser": "^3.1.2"
   }
 }
