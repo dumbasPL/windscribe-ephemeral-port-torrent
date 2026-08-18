@@ -10,6 +10,7 @@ import (
 	"windscribe-ephemeral-port-torrent/config"
 	"windscribe-ephemeral-port-torrent/portforward"
 	"windscribe-ephemeral-port-torrent/torrent/deluge"
+	"windscribe-ephemeral-port-torrent/torrent/qbittorrent"
 	"windscribe-ephemeral-port-torrent/windscribe"
 )
 
@@ -21,7 +22,7 @@ func main() {
 
 	provider := windscribe.New(cfg.WindscribeAuthHash)
 
-	torrent, err := deluge.New(context.Background(), cfg.DelugeURL, cfg.DelugePassword, cfg.DelugeHostID)
+	clients, err := newTorrentClients(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -30,7 +31,7 @@ func main() {
 	go func() {
 		trigger <- "initial"
 		for name := range trigger {
-			nextRun, nextRetry := run(cfg, provider, torrent, name)
+			nextRun, nextRetry := run(cfg, provider, clients, name)
 			var at time.Time
 			var next string
 			switch {
@@ -51,9 +52,33 @@ func main() {
 	select {}
 }
 
+// newTorrentClients builds a client for every torrent application that has
+// credentials configured, failing if none do.
+func newTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) {
+	var clients []portforward.TorrentClient
+
+	if cfg.HasDeluge() {
+		c, err := deluge.New(context.Background(), cfg.DelugeURL, cfg.DelugePassword, cfg.DelugeHostID)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, c)
+	}
+
+	if cfg.HasQBittorrent() {
+		c, err := qbittorrent.New(context.Background(), cfg.QBittorrentURL, cfg.QBittorrentAPIKey)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, c)
+	}
+
+	return clients, nil
+}
+
 // run performs a single update pass and reports when the following run or
 // retry should happen. A retry always takes priority over a regular run.
-func run(cfg *config.Config, provider portforward.PortProvider, torrent portforward.TorrentClient, trigger string) (time.Time, time.Time) {
+func run(cfg *config.Config, provider portforward.PortProvider, clients []portforward.TorrentClient, trigger string) (time.Time, time.Time) {
 	log.Printf("starting update, trigger type: %s", trigger)
 
 	var nextRun, nextRetry time.Time
@@ -71,31 +96,39 @@ func run(cfg *config.Config, provider portforward.PortProvider, torrent portforw
 		nextRun = port.Expires.Add(cfg.WindscribeExtraDelay)
 	}
 
-	currentPort, err := torrent.GetPort()
-	if err != nil {
-		log.Printf("Deluge update failed: %v", err)
-		return nextRun, time.Now().Add(cfg.DelugeRetryDelay)
-	}
+	for _, torrent := range clients {
+		name := torrent.Name()
 
-	if portInfo != nil {
-		if currentPort == portInfo.Port {
-			log.Printf("Current deluge port (%d) already matches windscribe port", currentPort)
-			return nextRun, nextRetry
+		currentPort, err := torrent.GetPort()
+		if err != nil {
+			log.Printf("%s update failed: %v", name, err)
+			nextRetry = time.Now().Add(cfg.TorrentRetryDelay)
+			continue
 		}
 
-		log.Printf("Current deluge port (%d) does not match windscribe port (%d)", currentPort, portInfo.Port)
+		if portInfo == nil {
+			log.Printf("Windscribe port is unknown, %s port is %d", name, currentPort)
+			continue
+		}
+
+		if currentPort == portInfo.Port {
+			log.Printf("%s port (%d) already matches windscribe port", name, currentPort)
+			continue
+		}
+
+		log.Printf("%s port (%d) does not match windscribe port (%d)", name, currentPort, portInfo.Port)
 		if err := torrent.SetPort(portInfo.Port); err != nil {
-			log.Printf("Deluge update failed: %v", err)
-			return nextRun, time.Now().Add(cfg.DelugeRetryDelay)
+			log.Printf("%s update failed: %v", name, err)
+			nextRetry = time.Now().Add(cfg.TorrentRetryDelay)
+			continue
 		}
 
 		if currentPort, err = torrent.GetPort(); err != nil || currentPort != portInfo.Port {
-			log.Printf("Unable to set deluge port! Current deluge port: %d", currentPort)
-			return nextRun, time.Now().Add(cfg.DelugeRetryDelay)
+			log.Printf("Unable to set %s port! Current %s port: %d", name, name, currentPort)
+			nextRetry = time.Now().Add(cfg.TorrentRetryDelay)
+			continue
 		}
-		log.Printf("Deluge port updated")
-	} else {
-		log.Printf("Windscribe port is unknown, current deluge port is %d", currentPort)
+		log.Printf("%s port updated", name)
 	}
 
 	return nextRun, nextRetry

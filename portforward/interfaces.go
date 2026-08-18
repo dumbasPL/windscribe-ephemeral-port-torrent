@@ -24,6 +24,8 @@ type PortProvider interface {
 // TorrentClient is an application whose inbound listening port can be read
 // and changed.
 type TorrentClient interface {
+	// Name identifies the client, e.g. in log messages.
+	Name() string
 	// GetPort returns the torrent client's current configured listen port.
 	GetPort() (int, error)
 	// SetPort changes the torrent client's listen port to the given value.

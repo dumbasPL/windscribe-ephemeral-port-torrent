@@ -13,14 +13,24 @@ import (
 
 // Config holds the runtime settings for the application.
 type Config struct {
-	DelugeURL            string
-	DelugePassword       string
-	DelugeHostID         string
-	DelugeRetryDelay     time.Duration
+	TorrentRetryDelay    time.Duration
 	WindscribeAuthHash   string
 	WindscribeRetryDelay time.Duration
 	WindscribeExtraDelay time.Duration
+
+	DelugeURL      string
+	DelugePassword string
+	DelugeHostID   string
+
+	QBittorrentURL    string
+	QBittorrentAPIKey string
 }
+
+// HasDeluge reports whether Deluge is configured.
+func (c *Config) HasDeluge() bool { return c.DelugeURL != "" }
+
+// HasQBittorrent reports whether qBittorrent is configured.
+func (c *Config) HasQBittorrent() bool { return c.QBittorrentURL != "" }
 
 // Load reads any present .env file (existing environment variables win) and
 // builds a Config, failing on missing required variables or invalid numbers.
@@ -30,24 +40,29 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := Config{
+		WindscribeAuthHash: os.Getenv("WINDSCRIBE_AUTH_HASH"),
 		DelugeURL:          os.Getenv("DELUGE_URL"),
 		DelugePassword:     os.Getenv("DELUGE_PASSWORD"),
 		DelugeHostID:       os.Getenv("DELUGE_HOST_ID"),
-		WindscribeAuthHash: os.Getenv("WINDSCRIBE_AUTH_HASH"),
+		QBittorrentURL:     os.Getenv("QBITTORRENT_URL"),
+		QBittorrentAPIKey:  os.Getenv("QBITTORRENT_API_KEY"),
 	}
 
-	if cfg.DelugeURL == "" {
-		return nil, errors.New("missing environment variable DELUGE_URL")
-	}
-	if cfg.DelugePassword == "" {
-		return nil, errors.New("missing environment variable DELUGE_PASSWORD")
-	}
 	if cfg.WindscribeAuthHash == "" {
 		return nil, errors.New("missing environment variable WINDSCRIBE_AUTH_HASH")
 	}
+	if !cfg.HasDeluge() && !cfg.HasQBittorrent() {
+		return nil, errors.New("at least one of DELUGE_URL or QBITTORRENT_URL must be set")
+	}
+	if cfg.HasDeluge() && cfg.DelugePassword == "" {
+		return nil, errors.New("DELUGE_PASSWORD is required when DELUGE_URL is set")
+	}
+	if cfg.HasQBittorrent() && cfg.QBittorrentAPIKey == "" {
+		return nil, errors.New("QBITTORRENT_API_KEY is required when QBITTORRENT_URL is set")
+	}
 
 	var err error
-	if cfg.DelugeRetryDelay, err = envDurationMs("DELUGE_RETRY_DELAY", 5*60*1000); err != nil {
+	if cfg.TorrentRetryDelay, err = envDurationMs("TORRENT_RETRY_DELAY", 5*60*1000); err != nil {
 		return nil, err
 	}
 	if cfg.WindscribeRetryDelay, err = envDurationMs("WINDSCRIBE_RETRY_DELAY", 60*60*1000); err != nil {

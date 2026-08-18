@@ -36,6 +36,9 @@ func New(ctx context.Context, url, password, defaultHostID string) (*Client, err
 	return &Client{d: d, defaultHostID: defaultHostID}, nil
 }
 
+// Name identifies the client in log messages.
+func (c *Client) Name() string { return "deluge" }
+
 // GetPort returns Deluge's current configured listen port.
 func (c *Client) GetPort() (int, error) {
 	if err := c.ensureConnection(); err != nil {
