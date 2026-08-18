@@ -1,0 +1,6 @@
+.env
+.git
+.gitignore
+.github
+Dockerfile
+windscribe-ephemeral-port-torrent
