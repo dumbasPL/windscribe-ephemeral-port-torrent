@@ -11,6 +11,7 @@ import (
 	"windscribe-ephemeral-port-torrent/portforward"
 	"windscribe-ephemeral-port-torrent/torrent/deluge"
 	"windscribe-ephemeral-port-torrent/torrent/qbittorrent"
+	"windscribe-ephemeral-port-torrent/torrent/transmission"
 	"windscribe-ephemeral-port-torrent/windscribe"
 )
 
@@ -67,6 +68,14 @@ func newTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) 
 
 	if cfg.HasQBittorrent() {
 		c, err := qbittorrent.New(context.Background(), cfg.QBittorrentURL, cfg.QBittorrentAPIKey)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, c)
+	}
+
+	if cfg.HasTransmission() {
+		c, err := transmission.New(context.Background(), cfg.TransmissionURL, cfg.TransmissionUsername, cfg.TransmissionPassword)
 		if err != nil {
 			return nil, err
 		}

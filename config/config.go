@@ -24,6 +24,10 @@ type Config struct {
 
 	QBittorrentURL    string
 	QBittorrentAPIKey string
+
+	TransmissionURL      string
+	TransmissionUsername string
+	TransmissionPassword string
 }
 
 // HasDeluge reports whether Deluge is configured.
@@ -31,6 +35,9 @@ func (c *Config) HasDeluge() bool { return c.DelugeURL != "" }
 
 // HasQBittorrent reports whether qBittorrent is configured.
 func (c *Config) HasQBittorrent() bool { return c.QBittorrentURL != "" }
+
+// HasTransmission reports whether Transmission is configured.
+func (c *Config) HasTransmission() bool { return c.TransmissionURL != "" }
 
 // Load reads any present .env file (existing environment variables win) and
 // builds a Config, failing on missing required variables or invalid numbers.
@@ -40,25 +47,31 @@ func Load(path string) (*Config, error) {
 	}
 
 	cfg := Config{
-		WindscribeAuthHash: os.Getenv("WINDSCRIBE_AUTH_HASH"),
-		DelugeURL:          os.Getenv("DELUGE_URL"),
-		DelugePassword:     os.Getenv("DELUGE_PASSWORD"),
-		DelugeHostID:       os.Getenv("DELUGE_HOST_ID"),
-		QBittorrentURL:     os.Getenv("QBITTORRENT_URL"),
-		QBittorrentAPIKey:  os.Getenv("QBITTORRENT_API_KEY"),
+		WindscribeAuthHash:   os.Getenv("WINDSCRIBE_AUTH_HASH"),
+		DelugeURL:            os.Getenv("DELUGE_URL"),
+		DelugePassword:       os.Getenv("DELUGE_PASSWORD"),
+		DelugeHostID:         os.Getenv("DELUGE_HOST_ID"),
+		QBittorrentURL:       os.Getenv("QBITTORRENT_URL"),
+		QBittorrentAPIKey:    os.Getenv("QBITTORRENT_API_KEY"),
+		TransmissionURL:      os.Getenv("TRANSMISSION_URL"),
+		TransmissionUsername: os.Getenv("TRANSMISSION_USERNAME"),
+		TransmissionPassword: os.Getenv("TRANSMISSION_PASSWORD"),
 	}
 
 	if cfg.WindscribeAuthHash == "" {
 		return nil, errors.New("missing environment variable WINDSCRIBE_AUTH_HASH")
 	}
-	if !cfg.HasDeluge() && !cfg.HasQBittorrent() {
-		return nil, errors.New("at least one of DELUGE_URL or QBITTORRENT_URL must be set")
+	if !cfg.HasDeluge() && !cfg.HasQBittorrent() && !cfg.HasTransmission() {
+		return nil, errors.New("at least one of DELUGE_URL, QBITTORRENT_URL or TRANSMISSION_URL must be set")
 	}
 	if cfg.HasDeluge() && cfg.DelugePassword == "" {
 		return nil, errors.New("DELUGE_PASSWORD is required when DELUGE_URL is set")
 	}
 	if cfg.HasQBittorrent() && cfg.QBittorrentAPIKey == "" {
 		return nil, errors.New("QBITTORRENT_API_KEY is required when QBITTORRENT_URL is set")
+	}
+	if cfg.HasTransmission() && (cfg.TransmissionUsername == "" || cfg.TransmissionPassword == "") {
+		return nil, errors.New("TRANSMISSION_USERNAME and TRANSMISSION_PASSWORD are required when TRANSMISSION_URL is set")
 	}
 
 	var err error
