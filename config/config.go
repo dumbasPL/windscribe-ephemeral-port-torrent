@@ -28,6 +28,9 @@ type Config struct {
 	TransmissionURL      string
 	TransmissionUsername string
 	TransmissionPassword string
+
+	GluetunURL    string
+	GluetunAPIKey string
 }
 
 // HasDeluge reports whether Deluge is configured.
@@ -38,6 +41,9 @@ func (c *Config) HasQBittorrent() bool { return c.QBittorrentURL != "" }
 
 // HasTransmission reports whether Transmission is configured.
 func (c *Config) HasTransmission() bool { return c.TransmissionURL != "" }
+
+// HasGluetun reports whether Gluetun is configured.
+func (c *Config) HasGluetun() bool { return c.GluetunURL != "" }
 
 // Load reads any present .env file (existing environment variables win) and
 // builds a Config, failing on missing required variables or invalid numbers.
@@ -56,13 +62,15 @@ func Load(path string) (*Config, error) {
 		TransmissionURL:      os.Getenv("TRANSMISSION_URL"),
 		TransmissionUsername: os.Getenv("TRANSMISSION_USERNAME"),
 		TransmissionPassword: os.Getenv("TRANSMISSION_PASSWORD"),
+		GluetunURL:           os.Getenv("GLUETUN_URL"),
+		GluetunAPIKey:        os.Getenv("GLUETUN_API_KEY"),
 	}
 
 	if cfg.WindscribeAuthHash == "" {
 		return nil, errors.New("missing environment variable WINDSCRIBE_AUTH_HASH")
 	}
-	if !cfg.HasDeluge() && !cfg.HasQBittorrent() && !cfg.HasTransmission() {
-		return nil, errors.New("at least one of DELUGE_URL, QBITTORRENT_URL or TRANSMISSION_URL must be set")
+	if !cfg.HasDeluge() && !cfg.HasQBittorrent() && !cfg.HasTransmission() && !cfg.HasGluetun() {
+		return nil, errors.New("at least one of DELUGE_URL, QBITTORRENT_URL, TRANSMISSION_URL or GLUETUN_URL must be set")
 	}
 	if cfg.HasDeluge() && cfg.DelugePassword == "" {
 		return nil, errors.New("DELUGE_PASSWORD is required when DELUGE_URL is set")
@@ -72,6 +80,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.HasTransmission() && (cfg.TransmissionUsername == "" || cfg.TransmissionPassword == "") {
 		return nil, errors.New("TRANSMISSION_USERNAME and TRANSMISSION_PASSWORD are required when TRANSMISSION_URL is set")
+	}
+	if cfg.HasGluetun() && cfg.GluetunAPIKey == "" {
+		return nil, errors.New("GLUETUN_API_KEY is required when GLUETUN_URL is set")
 	}
 
 	var err error
