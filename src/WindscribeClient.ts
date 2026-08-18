@@ -1,13 +1,4 @@
-import AsyncLock from 'async-lock';
-import {AxiosResponse, default as axios} from 'axios';
-import {default as Keyv, KeyvStoreAdapter} from 'keyv';
-import {Cookie, parse as parseCookie} from 'set-cookie-parser';
-import qs from 'qs';
-
-
-const lock = new AsyncLock();
-
-const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36';
+const userAgent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36';
 
 interface CsrfInfo {
   csrfTime: number;
@@ -26,16 +17,46 @@ export interface WindscribePort {
 
 export class WindscribeClient {
 
-  private cache: Keyv<string>;
+  private portCache: WindscribePort | null = null;
 
-  constructor(
-    private username: string,
-    private password: string,
-    cache?: KeyvStoreAdapter,
-  ) {
-    this.cache = new Keyv({
-      store: cache,
-      namespace: 'windscribe',
+  constructor(private authHash: string) {}
+
+  private async request<T>(method: string, path: string, body?: string, headers?: Record<string, string>): Promise<T> {
+    const response = await fetch(`https://windscribe.com${path}`, {
+      method,
+      headers: {
+        'Cookie': `ws_session_auth_hash=${this.authHash};`,
+        'User-Agent': userAgent,
+        ...headers,
+      },
+      body,
+      redirect: 'manual',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${path}: ${response.status} ${response.statusText}`);
+    }
+
+    // windscribe will sometimes return a JSON response with text/html content type
+    const res = await response.text();
+    try {
+      return JSON.parse(res) as T;
+    } catch (error) {
+      return res as unknown as T;
+    }
+  }
+
+  private async get<T>(path: string): Promise<T> {
+    return this.request<T>('GET', path);
+  }
+
+  private async post<T>(path: string, body: Record<string, any>): Promise<T> {
+    const formBody = new URLSearchParams();
+    for (const [key, value] of Object.entries(body)) {
+      formBody.append(key, String(value));
+    }
+    return this.request<T>('POST', path, formBody.toString(), {
+      'Content-Type': 'application/x-www-form-urlencoded',
     });
   }
 
@@ -55,7 +76,7 @@ export class WindscribeClient {
       // update data to match current state
       portForwardingInfo.ports = [];
       portForwardingInfo.epfExpires = 0;
-      await this.cache.delete('port');
+      this.portCache = null;
     }
 
     // request new port if we don't have any
@@ -71,110 +92,22 @@ export class WindscribeClient {
       expires: new Date((portForwardingInfo.epfExpires + 86400 * 7) * 1000),
     };
 
-    await this.cache.set('port', ret.port.toString(), ret.expires.getTime() - Date.now());
-
+    this.portCache = ret;
     return ret;
   }
 
   async getPort(): Promise<WindscribePort | null> {
-    const cachedPort = await this.cache.get('port', {raw: true});
-    return !cachedPort?.value || !cachedPort?.expires ? null : {
-      port: parseInt(cachedPort.value),
-      expires: new Date(cachedPort.expires),
-    };
+    return this.portCache;
   }
 
-  private async getSession(forceLogin: boolean = false): Promise<string> {
-    return lock.acquire('getSession', async () => {
-      if (forceLogin) {
-        // force clear the session
-        await this.cache.delete('sessionCookie');
-      } else {
-        // try to get cached value
-        const cachedCookie = await this.cache.get('sessionCookie');
-        if (cachedCookie != undefined) {
-          return cachedCookie;
-        }
-      }
-
-      // get a new session
-      console.log(`Invalid/missing session cookie, logging into windscribe`);
-      const sessionCookie = await this.login();
-      if (!sessionCookie.expires) {
-        throw new Error('Windscribe session cookie does not have an expiration date');
-      }
-      await this.cache.set('sessionCookie', sessionCookie.value, sessionCookie.expires.getTime() - Date.now());
-      console.log(`Successfully logged into windscribe, session expires in ${Math.floor((sessionCookie.expires.getTime() - Date.now()) / (100 * 60)) / 10} minutes`);
-
-      return sessionCookie.value;
-    });
-  }
-
-  private async login(): Promise<Cookie> {
+  private async getMyAccountCsrfToken(): Promise<CsrfInfo> {
     try {
-      // get csrf token and time
-      const {data: csrfData} = await axios.post<{csrf_token: string, csrf_time: number}>('https://res.windscribe.com/res/logintoken', null, {
-        headers: {'User-Agent': userAgent},
-      });
-
-      // log in
-      const res = await axios.post('https://windscribe.com/login', qs.stringify({
-        login: '1',
-        upgrade: '0',
-        csrf_time: csrfData.csrf_time,
-        csrf_token: csrfData.csrf_token,
-        username: this.username,
-        password: this.password,
-        code: ''
-      }), {
-        headers: {'content-type': 'application/x-www-form-urlencoded', 'User-Agent': userAgent},
-        maxRedirects: 0,
-        validateStatus: status => status == 302,
-      });
-      const setCookieHeader = res.headers['set-cookie'];
-      if (!setCookieHeader) {
-        throw new Error('No set-cookie header found in login response');
-      }
-
-      // extract the cookie
-      return parseCookie(setCookieHeader, {map: true, decodeValues: true})['ws_session_auth_hash'];
-    } catch (error) {
-      // try to extract windscribe message
-      if (axios.isAxiosError(error) && error.response) {
-        const response = error.response as AxiosResponse<string>;
-        const errorMessage = /<div class="content_message error">.*>(.*)<\/div/.exec(response.data);
-        if (response.status == 200 && errorMessage && errorMessage[1]) {
-          throw new Error(`Failed to log into windscribe: ${errorMessage[1]}`);
-        }
-      }
-
-      // or throw a generic error if windscribe message not found
-      throw new Error(`Failed to log into windscribe: ${error instanceof Error ? error.message : String(error)}`);
-    }
-  }
-
-  private async getMyAccountCsrfToken(forceLogin: boolean = false): Promise<CsrfInfo> {
-    try {
-      const sessionCookie = await this.getSession(forceLogin);
-
       // get page
-      const res = await axios.get<string>('https://windscribe.com/myaccount', {
-        headers: {
-          'Cookie': `ws_session_auth_hash=${sessionCookie};`,
-          'User-Agent': userAgent,
-        },
-        maxRedirects: 0,
-        validateStatus: status => [302, 200].includes(status),
-      });
-
-      if (res.status == 302) {
-        // force to login again as the current session is invalid
-        return await this.getMyAccountCsrfToken(true);
-      }
+      const res = await this.get<string>('/myaccount');
 
       // extract csrf tokena and time from page content
-      const csrfTime = /csrf_time = (\d+);/.exec(res.data);
-      const csrfToken = /csrf_token = '(\w+)';/.exec(res.data);
+      const csrfTime = /csrf_time = (\d+);/.exec(res);
+      const csrfToken = /csrf_token = '(\w+)';/.exec(res);
       if (!csrfTime || !csrfToken) {
         throw new Error('Failed to extract csrf token and time from my account page');
       }
@@ -190,26 +123,20 @@ export class WindscribeClient {
 
   private async getPortForwardingInfo(): Promise<PortForwardingInfo> {
     try {
-      const sessionCookie = await this.getSession();
-
       // load sub page
-      const res = await axios.get<string>('https://windscribe.com/staticips/load', {
-        headers: {
-          'Cookie': `ws_session_auth_hash=${sessionCookie};`,
-          'User-Agent': userAgent,
-        }
-      });
+      const res = await this.get<string>('/staticips/load');
 
       // extract data from page
-      const epfExpires = res.data.match(/epfExpires = (\d+);/); // this is always present. set to 0 if no port is active
-      const ports = [...res.data.matchAll(/<span>(?<port>\d+)<\/span>/g)].map(x => +x[1]); // this will return an empty array when there are not pots forwarded
+      const epfExpires = res.match(/epfExpires = (\d+);/); // this is always present. set to 0 if no port is active
+      const pfExt = res.match(/<span class="pf-ext">(\d+)<\/span>/); // this is only present if a port is active
+      const pfInt = res.match(/<span class="pf-int">(\d+)<\/span>/); // this is only present if a port is active
       if (!epfExpires) {
         throw new Error('Failed to extract epfExpires from static IPs page');
       }
 
       return {
         epfExpires: +epfExpires[1],
-        ports,
+        ports: pfExt && pfInt ? [+pfExt[1], +pfInt[1]] : [],
       };
     } catch (error) {
       throw new Error(`Failed to get port forwarding info: ${error instanceof Error ? error.message : String(error)}`);
@@ -218,27 +145,23 @@ export class WindscribeClient {
 
   private async removeEphemeralPort(csrfInfo: CsrfInfo): Promise<void> {
     try {
-      const sessionCookie = await this.getSession();
-
       // remove port
-      const res = await axios.post<{success: number, epf: boolean, message?: string}>('https://windscribe.com/staticips/deleteEphPort', qs.stringify({
-        ctime: csrfInfo.csrfTime,
-        ctoken: csrfInfo.csrfToken
-      }), {
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'Cookie': `ws_session_auth_hash=${sessionCookie};`,
-          'User-Agent': userAgent,
-        }
-      });
+      const res = await this.post<{
+        success: number,
+        epf: boolean,
+        message?: string
+      }>(
+        '/staticips/deleteEphPort',
+        {ctime: csrfInfo.csrfTime, ctoken: csrfInfo.csrfToken}
+      );
 
       // check for errors
-      if (res.data.success == 0) {
-        throw new Error(`success = 0; ${res.data.message ?? 'No message'}`);
+      if (res.success == 0) {
+        throw new Error(`success = 0; ${res.message ?? 'No message'}`);
       }
 
       // make sure we actually removed it
-      if (res.data.epf == false) {
+      if (res.epf == false) {
         console.warn('Tried to remove a non-existent ephemeral port, ignoring');
       } else {
         console.log('Deleted ephemeral port');
@@ -250,28 +173,27 @@ export class WindscribeClient {
 
   private async requestMatchingEphemeralPort(csrfInfo: CsrfInfo): Promise<PortForwardingInfo> {
     try {
-      const sessionCookie = await this.getSession();
-
       // request new port
-      const res = await axios.post<{success: number, message?: string, epf?: {ext: number, int: number, start_ts: number}}>('https://windscribe.com/staticips/postEphPort', qs.stringify({
-        ctime: csrfInfo.csrfTime,
-        ctoken: csrfInfo.csrfToken,
-        port: '', // empty string for a matching port
-      }), {
-        headers: {
-          'content-type': 'application/x-www-form-urlencoded',
-          'Cookie': `ws_session_auth_hash=${sessionCookie};`,
-          'User-Agent': userAgent,
+      const res = await this.post<{
+        success: number,
+        message?: string,
+        epf?: {
+          ext: number,
+          int: number,
+          start_ts: number
         }
-      });
+      }>(
+        '/staticips/postEphPort',
+        {ctime: csrfInfo.csrfTime, ctoken: csrfInfo.csrfToken}
+      );
 
       // check for errors
-      if (res.data.success == 0) {
-        throw new Error(`success = 0; ${res.data.message ?? 'No message'}`);
+      if (res.success == 0) {
+        throw new Error(`success = 0; ${res.message ?? 'No message'}`);
       }
 
       // epf should be present by this point
-      const epf = res.data.epf!;
+      const epf = res.epf!;
       console.log(`Created new matching ephemeral port: ${epf.ext}`);
       return {
         epfExpires: epf.start_ts,

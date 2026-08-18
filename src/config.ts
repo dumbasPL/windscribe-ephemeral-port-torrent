@@ -35,13 +35,8 @@ const configTemplate = {
     default: `${5 * 60 * 1000}`, // 5 minutes
     type: Number,
   } as ConfigTemplateOptionalEntry<number>,
-  windscribeUsername: {
-    envVariableName: 'WINDSCRIBE_USERNAME',
-    required: true,
-    type: String,
-  } as ConfigTemplateRequiredEntry<string>,
-  windscribePassword: {
-    envVariableName: 'WINDSCRIBE_PASSWORD',
+  windscribeAuthHash: {
+    envVariableName: 'WINDSCRIBE_AUTH_HASH',
     required: true,
     type: String,
   } as ConfigTemplateRequiredEntry<string>,
@@ -60,12 +55,6 @@ const configTemplate = {
   cronSchedule: {
     envVariableName: 'CRON_SCHEDULE',
     required: false,
-    type: String,
-  } as ConfigTemplateOptionalEntry<string>,
-  cacheDir: {
-    envVariableName: 'CACHE_DIR',
-    required: false,
-    default: './cache',
     type: String,
   } as ConfigTemplateOptionalEntry<string>,
 };

@@ -1,6 +1,6 @@
 {
   "name": "project",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "",
   "keywords": [],
   "license": "MIT",
@@ -8,30 +8,21 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "start": "node --loader ts-node/esm src/index.ts",
-    "dev": "nodemon --config nodemon.json src/index.ts",
-    "dev:debug": "nodemon --config nodemon.json --inspect-brk src/index.ts",
+    "prestart": "tsc",
+    "start": "node dist/index.js",
     "build": "tsc"
   },
   "devDependencies": {
-    "@types/async-lock": "^1.4.0",
     "@types/node": "^26.2.0",
     "@types/node-cron": "^3.0.8",
-    "@types/qs": "^6.9.7",
-    "@types/set-cookie-parser": "^2.4.2",
-    "nodemon": "^3.0.1",
-    "ts-node": "^10.9.1",
     "typescript": "^7.0.2"
   },
   "dependencies": {
     "@ctrl/deluge": "^8.0.0",
-    "async-lock": "^1.4.0",
-    "axios": "^1.4.0",
     "dotenv": "^17.4.2",
-    "keyv": "^5.6.0",
-    "keyv-file": "^5.3.5",
-    "node-cron": "^4.6.0",
-    "qs": "^6.11.2",
-    "set-cookie-parser": "^3.1.2"
+    "node-cron": "^4.6.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

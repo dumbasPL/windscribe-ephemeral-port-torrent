@@ -1,6 +1,4 @@
 import 'dotenv/config';
-import path from 'path';
-import {KeyvFile} from 'keyv-file';
 import {getConfig} from './config.js';
 import {DelugeClient} from './DelugeClient.js';
 import {WindscribeClient, WindscribePort} from './WindscribeClient.js';
@@ -9,13 +7,8 @@ import {schedule} from 'node-cron';
 // load config
 const config = getConfig();
 
-// init cache (if configured)
-const cache = !config.cacheDir ? undefined : new KeyvFile({
-  filename: path.join(config.cacheDir, 'cache.json'),
-});
-
 // inti windscribe client
-const windscribe = new WindscribeClient(config.windscribeUsername, config.windscribePassword, cache);
+const windscribe = new WindscribeClient(config.windscribeAuthHash);
 
 // init deluge client
 const deluge = new DelugeClient(config.delugeUrl, config.delugePassword, config.delugeHostId);
