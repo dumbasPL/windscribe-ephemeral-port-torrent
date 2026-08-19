@@ -61,7 +61,6 @@ At least one torrent client or gluetun is required to be configured.
 | TRANSMISSION_PASSWORD | The password for the transmission web UI | NO |  |
 | GLUETUN_URL | The base URL for the gluetun Control server | NO |  |
 | GLUETUN_API_KEY | The API key for the gluetun Control server (needs /v1/portforward permission) | NO |  |
-| CRON_SCHEDULE | An extra cron schedule used to periodically validate and update the port if needed. Disabled if left empty | NO |  |
 | WINDSCRIBE_RETRY_DELAY | how long to wait (in milliseconds) before retrying after a windscribe error. | NO | 3600000 (1 hour) |
 | WINDSCRIBE_EXTRA_DELAY | how long to wait (in milliseconds) after the ephemeral port expires before trying to create a new one. | NO | 60000 (1 minute) |
 | TORRENT_RETRY_DELAY | how long to wait (in milliseconds) before retrying after a torrent client error | NO | 300000 (5 minutes) |
