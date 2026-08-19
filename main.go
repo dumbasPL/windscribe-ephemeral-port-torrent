@@ -24,7 +24,7 @@ func main() {
 
 	provider := windscribe.New(cfg.WindscribeAuthHash)
 
-	clients, err := newTorrentClients(cfg)
+	clients, err := initTorrentClients(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -54,9 +54,9 @@ func main() {
 	select {}
 }
 
-// newTorrentClients builds a client for every torrent application that has
+// initTorrentClients builds a client for every torrent application that has
 // credentials configured, failing if none do.
-func newTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) {
+func initTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) {
 	var clients []portforward.TorrentClient
 
 	if cfg.HasDeluge() {
@@ -99,13 +99,13 @@ func newTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) 
 func run(cfg *config.Config, provider portforward.PortProvider, clients []portforward.TorrentClient, trigger string) (time.Time, time.Time) {
 	log.Printf("starting update, trigger type: %s", trigger)
 
-	var nextRun, nextRetry time.Time
+	var nextRun, nextWsRetry, nextRetry time.Time
 	var portInfo *portforward.Port
 
 	port, err := provider.UpdatePort()
 	if err != nil {
 		log.Printf("Windscribe update failed: %v", err)
-		nextRetry = time.Now().Add(cfg.WindscribeRetryDelay)
+		nextWsRetry = time.Now().Add(cfg.WindscribeRetryDelay)
 		if cached, e := provider.GetPort(); e == nil {
 			portInfo = cached
 		}
@@ -147,6 +147,15 @@ func run(cfg *config.Config, provider portforward.PortProvider, clients []portfo
 			continue
 		}
 		log.Printf("%s port updated", name)
+	}
+
+	// pick whichever is shorter
+	if !nextWsRetry.IsZero() && !nextRun.IsZero() {
+		if nextWsRetry.Before(nextRun) {
+			nextRetry = nextWsRetry
+		}
+	} else if !nextWsRetry.IsZero() {
+		nextRetry = nextWsRetry
 	}
 
 	return nextRun, nextRetry
