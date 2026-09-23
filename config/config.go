@@ -29,8 +29,9 @@ type Config struct {
 	TransmissionUsername string
 	TransmissionPassword string
 
-	GluetunURL    string
-	GluetunAPIKey string
+	GluetunURL     string
+	GluetunAPIKey  string
+	GluetunRestart bool
 }
 
 // HasDeluge reports whether Deluge is configured.
@@ -86,6 +87,12 @@ func Load(path string) (*Config, error) {
 	}
 
 	var err error
+	if cfg.GluetunRestart, err = envBool("GLUETUN_RESTART", false); err != nil {
+		return nil, err
+	}
+	if cfg.GluetunRestart && !cfg.HasGluetun() {
+		return nil, errors.New("GLUETUN_RESTART requires GLUETUN_URL to be set")
+	}
 	if cfg.TorrentRetryDelay, err = envDurationMs("TORRENT_RETRY_DELAY", 5*60*1000); err != nil {
 		return nil, err
 	}
@@ -109,6 +116,18 @@ func envDurationMs(name string, def int64) (time.Duration, error) {
 		return 0, fmt.Errorf("environment variable %s must be an integer number of milliseconds: %v", name, err)
 	}
 	return time.Duration(ms) * time.Millisecond, nil
+}
+
+func envBool(name string, def bool) (bool, error) {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return def, nil
+	}
+	v, err := strconv.ParseBool(raw)
+	if err != nil {
+		return false, fmt.Errorf("environment variable %s must be a boolean: %v", name, err)
+	}
+	return v, nil
 }
 
 // loadDotEnv applies KEY=VALUE lines from path as environment variables

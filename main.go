@@ -84,7 +84,7 @@ func initTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error)
 	}
 
 	if cfg.HasGluetun() {
-		c, err := gluetun.New(context.Background(), cfg.GluetunURL, cfg.GluetunAPIKey)
+		c, err := gluetun.New(context.Background(), cfg.GluetunURL, cfg.GluetunAPIKey, cfg.GluetunRestart)
 		if err != nil {
 			return nil, err
 		}

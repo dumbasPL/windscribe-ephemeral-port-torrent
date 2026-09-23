@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -18,15 +19,18 @@ import (
 type Client struct {
 	baseURL string
 	apiKey  string
+	restart bool
 	http    *http.Client
 }
 
 // New connects to the Gluetun control server at baseURL using apiKey,
-// verifying reachability and authentication up front.
-func New(ctx context.Context, baseURL, apiKey string) (*Client, error) {
+// verifying reachability and authentication up front. When restart is true,
+// the VPN connection is restarted whenever the forwarded port changes.
+func New(ctx context.Context, baseURL, apiKey string, restart bool) (*Client, error) {
 	c := &Client{
 		baseURL: strings.TrimSuffix(baseURL, "/"),
 		apiKey:  apiKey,
+		restart: restart,
 		http:    &http.Client{Timeout: 30 * time.Second},
 	}
 
@@ -44,14 +48,42 @@ func (c *Client) GetPort() (int, error) {
 	return c.getPort(context.Background())
 }
 
-// SetPort overrides Gluetun's forwarded ports with just port.
+// SetPort restarts the VPN connection when configured and then overrides
+// Gluetun's forwarded ports with just port. A failed restart is logged and
+// does not prevent the port from being updated.
 func (c *Client) SetPort(port int) error {
+	if c.restart {
+		log.Printf("Restarting gluetun VPN to apply port %d", port)
+		if err := c.restartVPN(context.Background()); err != nil {
+			log.Printf("Failed to restart gluetun VPN: %v", err)
+		}
+	}
+
 	body, err := json.Marshal(map[string]any{"ports": []int{port}})
 	if err != nil {
 		return err
 	}
 	_, err = c.request(context.Background(), http.MethodPut, "/v1/portforward", body)
 	return err
+}
+
+// restartVPN stops and starts the VPN through the control server so that a
+// changed forwarded port takes effect on a fresh connection.
+func (c *Client) restartVPN(ctx context.Context) error {
+	for _, status := range []string{"stopped", "running"} {
+		body, err := json.Marshal(map[string]string{"status": status})
+		if err != nil {
+			return err
+		}
+		if _, err := c.request(ctx, http.MethodPut, "/v1/vpn/status", body); err != nil {
+			return fmt.Errorf("set vpn status to %s: %v", status, err)
+		}
+		if status == "stopped" {
+			// Give gluetun a moment to fully stop before starting again.
+			time.Sleep(time.Second)
+		}
+	}
+	return nil
 }
 
 func (c *Client) getPort(ctx context.Context) (int, error) {

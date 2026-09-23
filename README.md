@@ -60,7 +60,8 @@ At least one torrent client or gluetun is required to be configured.
 | TRANSMISSION_USERNAME | The username for the transmission web UI | NO |  |
 | TRANSMISSION_PASSWORD | The password for the transmission web UI | NO |  |
 | GLUETUN_URL | The base URL for the gluetun Control server | NO |  |
-| GLUETUN_API_KEY | The API key for the gluetun Control server (needs /v1/portforward permission) | NO |  |
+| GLUETUN_API_KEY | The API key for the gluetun Control server (needs /v1/portforward permission, and /v1/vpn/status when GLUETUN_RESTART is enabled) | NO |  |
+| GLUETUN_RESTART | Restart the VPN connection (stop + start) through the gluetun Control server whenever the forwarded port changes | NO | false |
 | WINDSCRIBE_RETRY_DELAY | how long to wait (in milliseconds) before retrying after a windscribe error. | NO | 3600000 (1 hour) |
 | WINDSCRIBE_EXTRA_DELAY | how long to wait (in milliseconds) after the ephemeral port expires before trying to create a new one. | NO | 60000 (1 minute) |
 | TORRENT_RETRY_DELAY | how long to wait (in milliseconds) before retrying after a torrent client error | NO | 300000 (5 minutes) |
@@ -85,6 +86,7 @@ services:
       # TRANSMISSION_PASSWORD: <password>
       # GLUETUN_URL: http://gluetun:8000
       # GLUETUN_API_KEY: <apiKey>
+      # GLUETUN_RESTART: true
 ```
 
 ### Native
