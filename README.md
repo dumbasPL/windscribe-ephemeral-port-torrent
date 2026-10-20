@@ -25,7 +25,7 @@ Automatically create ephemeral ports in Windscribe and update your torrent clien
 A while ago [Windscribe added Cloudflare CAPTCHA, and their own CAPTCHA](https://github.com/dumbasPL/windscribe-ephemeral-port-torrent/issues/17)
 to the login endpoint, so we can no longer log in using the normal credentials reliably.
 Normal web sessions expire, but the session in the Windscribe app doesn't.
-Turns out that at some point, they decided to merge the APIs, and now the same token that's used in the app also works on the web.
+Turns out that at some point, they decided to merge the APIs, and now the same token that's used in the app also works with the new web API.
 This means that you only need to extract it once, and as long as you don't log out of the desktop app, it will keep working.
 
 ### How?
