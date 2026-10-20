@@ -68,7 +68,9 @@ func (c *Client) SetPort(port int) error {
 }
 
 // restartVPN stops and starts the VPN through the control server so that a
-// changed forwarded port takes effect on a fresh connection.
+// changed forwarded port takes effect on a fresh connection. It returns once
+// the tunnel is up, since gluetun clears the forwarded ports when it finishes
+// bringing the tunnel up.
 func (c *Client) restartVPN(ctx context.Context) error {
 	for _, status := range []string{"stopped", "running"} {
 		body, err := json.Marshal(map[string]string{"status": status})
@@ -83,6 +85,31 @@ func (c *Client) restartVPN(ctx context.Context) error {
 			time.Sleep(time.Second)
 		}
 	}
+	return c.waitTunnelUp(ctx, 60*time.Second)
+}
+
+// waitTunnelUp polls the public IP, which gluetun clears on disconnect and
+// fills in just before restarting its port forwarding service, then waits a
+// little longer for that restart to finish.
+func (c *Client) waitTunnelUp(ctx context.Context, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	for {
+		var res struct {
+			PublicIP string `json:"public_ip"`
+		}
+		if err := c.get(ctx, "/v1/publicip/ip", &res); err == nil && res.PublicIP != "" {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("wait for vpn tunnel: %v", ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+
+	time.Sleep(3 * time.Second)
 	return nil
 }
 

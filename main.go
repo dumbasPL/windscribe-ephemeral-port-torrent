@@ -55,9 +55,18 @@ func main() {
 }
 
 // initTorrentClients builds a client for every torrent application that has
-// credentials configured, failing if none do.
+// credentials configured, failing if none do. Gluetun comes first so that a
+// VPN restart happens before the torrent clients are updated.
 func initTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error) {
 	var clients []portforward.TorrentClient
+
+	if cfg.HasGluetun() {
+		c, err := gluetun.New(context.Background(), cfg.GluetunURL, cfg.GluetunAPIKey, cfg.GluetunRestart)
+		if err != nil {
+			return nil, err
+		}
+		clients = append(clients, c)
+	}
 
 	if cfg.HasDeluge() {
 		c, err := deluge.New(context.Background(), cfg.DelugeURL, cfg.DelugePassword, cfg.DelugeHostID)
@@ -77,14 +86,6 @@ func initTorrentClients(cfg *config.Config) ([]portforward.TorrentClient, error)
 
 	if cfg.HasTransmission() {
 		c, err := transmission.New(context.Background(), cfg.TransmissionURL, cfg.TransmissionUsername, cfg.TransmissionPassword)
-		if err != nil {
-			return nil, err
-		}
-		clients = append(clients, c)
-	}
-
-	if cfg.HasGluetun() {
-		c, err := gluetun.New(context.Background(), cfg.GluetunURL, cfg.GluetunAPIKey, cfg.GluetunRestart)
 		if err != nil {
 			return nil, err
 		}
